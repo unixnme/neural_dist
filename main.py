@@ -5,6 +5,7 @@ from torch.nn.utils import clip_grad_norm_
 from torch.nn import CrossEntropyLoss
 from model import Model
 from data import DataLoader, Dataset
+from tqdm import tqdm
 
 def main():
     parser = argparse.ArgumentParser('main')
@@ -27,6 +28,7 @@ def main():
     model = Model(num_emb, args.emb_dim, args.hidden_dim, num_class).to(device)
     optimizer = optim.SGD(model.parameters(), args.lr, args.momentum)
     loss_fn = CrossEntropyLoss()
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=.5, patience=10, verbose=True)
 
     dataset = Dataset(data)
     dataloader = DataLoader(dataset, args.batch_size, True, args.num_workers)
@@ -34,7 +36,7 @@ def main():
     model.train()
     for epoch in range(args.epochs):
         total_loss = 0
-        for x,y in dataloader:
+        for x,y in tqdm(dataloader):
             x, y = x.to(device), y.to(device)
             model.zero_grad()
             pred = model(x)
@@ -42,6 +44,7 @@ def main():
             loss.backward()
             clip_grad_norm_(model.parameters(), args.clip_norm)
             optimizer.step()
+            scheduler.step(loss)
             total_loss += loss.item()
 
         print('epcoh:%d\tloss:%f' % (epoch, total_loss))
