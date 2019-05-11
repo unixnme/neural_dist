@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import torch
 import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 from torch.nn import CrossEntropyLoss
@@ -19,6 +20,7 @@ def main():
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--save', type=str, default='model.pt')
     args = parser.parse_args()
     device = 'cuda' if args.cuda else 'cpu'
 
@@ -47,6 +49,7 @@ def main():
             total_loss += loss.item()
 
         scheduler.step(total_loss)
+        torch.save(model, args.save)
         print('epcoh:%d\tloss:%f' % (epoch, total_loss))
 
 
