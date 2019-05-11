@@ -8,6 +8,33 @@ from model import Model
 from data import DataLoader, Dataset
 from tqdm import tqdm
 
+
+def negative_sampling_loss(logit:torch.Tensor, target:torch.Tensor, neg:torch.Tensor):
+    '''
+    given logit, and its target indices and negative indices
+    calcuate the loss as negative of logit(neg) - logit(target)
+    '''
+    # logit in [batch_size, num_class]
+    # target in [batch_size]
+    # neg in [batch_size, num_samples]
+    pos = torch.FloatTensor([l[t] for l,t in zip(logit, target)]).sum()
+    neg = torch.cat([l[n] for l,n in zip(logit, neg)]).sum()
+    return (neg - pos) / len(logit)
+
+
+def sample_negatives(pos:torch.Tensor, high:int, num_samples:int):
+    '''
+    given positive, sample num_samples negatives at random from 0 to high
+    '''
+    samples = np.arange(high, dtype=np.int64)
+    neg = []
+    for p in pos:
+        n = np.random.choice(samples, num_samples + 1, replace=False)
+        idx = np.nonzero(p.item() != n)[0][:num_samples]
+        neg.append(n[idx])
+    neg = torch.LongTensor(neg)
+    return neg
+
 def main():
     parser = argparse.ArgumentParser('main')
     parser.add_argument('--data', type=str, default='data.txt')
@@ -21,6 +48,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--save', type=str, default='model.pt')
+    parser.add_argument('--loss', type=str, default='softmax')
+    parser.add_argument('--num_neg_samples', type=int, default=10)
     args = parser.parse_args()
     device = 'cuda' if args.cuda else 'cpu'
 
@@ -29,7 +58,12 @@ def main():
     num_class = len(set(data[:,1]))
     model = Model(num_emb, args.emb_dim, args.hidden_dim, num_class).to(device)
     optimizer = optim.SGD(model.parameters(), args.lr, args.momentum)
-    loss_fn = CrossEntropyLoss()
+    if args.loss == 'softmax':
+        loss_fn = CrossEntropyLoss()
+    elif args.loss == 'negative_sampling':
+        loss_fn = negative_sampling_loss
+    else:
+        raise ValueError
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=.5, patience=10, verbose=True)
 
     dataset = Dataset(data)
@@ -40,9 +74,15 @@ def main():
         total_loss = 0
         for x,y in tqdm(dataloader):
             x, y = x.to(device), y.to(device)
+            if args.loss == 'negative_sampling':
+                neg = sample_negatives(y, num_class, args.num_neg_samples).to(device)
+
             model.zero_grad()
             pred = model(x)
-            loss = loss_fn(pred,y)
+            if args.loss == 'negative_sampling':
+                loss = loss_fn(pred, y, neg)
+            elif args.loss == 'softmax':
+                loss = loss_fn(pred,y)
             loss.backward()
             clip_grad_norm_(model.parameters(), args.clip_norm)
             optimizer.step()
