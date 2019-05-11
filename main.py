@@ -17,8 +17,8 @@ def negative_sampling_loss(logit:torch.Tensor, target:torch.Tensor, neg:torch.Te
     # logit in [batch_size, num_class]
     # target in [batch_size]
     # neg in [batch_size, num_samples]
-    pos = torch.FloatTensor([l[t] for l,t in zip(logit, target)]).sum()
-    neg = torch.cat([l[n] for l,n in zip(logit, neg)]).sum()
+    pos = logit.new_tensor([l[t] for l,t in zip(logit, target)], requires_grad=True).mean()
+    neg = torch.cat([l[n] for l,n in zip(logit, neg)]).mean()
     return (neg - pos) / len(logit)
 
 
