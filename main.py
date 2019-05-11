@@ -44,9 +44,9 @@ def main():
             loss.backward()
             clip_grad_norm_(model.parameters(), args.clip_norm)
             optimizer.step()
-            scheduler.step(loss)
             total_loss += loss.item()
 
+        scheduler.step(total_loss)
         print('epcoh:%d\tloss:%f' % (epoch, total_loss))
 
 
