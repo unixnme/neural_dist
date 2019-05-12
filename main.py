@@ -64,29 +64,34 @@ def main():
     optimizer = optim.SGD(model.parameters(), args.lr, args.momentum)
     if args.loss == 'softmax':
         loss_fn = CrossEntropyLoss()
+        dataset = Dataset(data)
     elif args.loss == 'negative_sampling':
         loss_fn = negative_sampling_loss
+        dataset = Dataset(data, args.num_neg_samples)
     else:
         raise ValueError
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=.5, patience=10, verbose=True)
 
-    dataset = Dataset(data)
     dataloader = DataLoader(dataset, args.batch_size, True, args.num_workers)
 
     model.train()
     for epoch in range(args.epochs):
         total_loss = 0
         for x,y in tqdm(dataloader):
+            model.zero_grad()
+
             x, y = x.to(device), y.to(device)
             if args.loss == 'negative_sampling':
-                neg = sample_negatives(y, num_class, args.num_neg_samples).to(device)
+                pred = model(x[:,0])
+                target = x[:,1]
+                neg = y
+                loss = loss_fn(pred, target, neg)
 
-            model.zero_grad()
-            pred = model(x)
-            if args.loss == 'negative_sampling':
-                loss = loss_fn(pred, y, neg)
             elif args.loss == 'softmax':
-                loss = loss_fn(pred,y)
+                pred = model(x)
+                target = y
+                loss = loss_fn(pred, target)
+
             loss.backward()
             clip_grad_norm_(model.parameters(), args.clip_norm)
             optimizer.step()
