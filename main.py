@@ -30,8 +30,12 @@ def sample_negatives(pos:torch.Tensor, high:int, num_samples:int):
     neg = []
     for p in pos:
         n = np.random.choice(samples, num_samples + 1, replace=False)
-        idx = np.nonzero(p.item() != n)[0][:num_samples]
-        neg.append(n[idx])
+        idx = np.nonzero(p.item() == n)[0]
+        if idx:
+            idx = idx.item()
+            neg.append(np.concatenate([n[:idx], n[idx+1:]]))
+        else:
+            neg.append(n[:num_samples])
     neg = torch.LongTensor(neg)
     return neg
 
